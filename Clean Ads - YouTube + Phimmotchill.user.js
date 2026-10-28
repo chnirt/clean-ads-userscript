@@ -1,7 +1,7 @@
 
 // ==UserScript==
 // @name         Clean Ads - YouTube + Phimmotchill
-// @description  Hide ads on YouTube, Phimmotchill, Motchill and RoPhim, and skip player ads when a skip control exists
+// @description  Hide ads on YouTube, Phimmotchill, Motchill and RoPhim, skip player ads, and block ad popups and blank new tabs
 // @match        *://*/*
 // @run-at       document-start
 // @grant        none
@@ -57,6 +57,29 @@
     isPlayerHost ||
     (isEmbeddedFrame && fromStreamSite);
 
+  const ancestorIsStream = (() => {
+    try {
+      const origins = location.ancestorOrigins;
+      if (!origins || !origins.length) return false;
+
+      for (let i = 0; i < origins.length; i += 1) {
+        const host = new URL(origins[i]).hostname.toLowerCase();
+
+        if (
+          /(^|\.)phimmotchill\.bar$/.test(host) ||
+          /(^|\.)motchilltu\.com$/.test(host) ||
+          /(^|\.)rophim10\.cam$/.test(host)
+        ) {
+          return true;
+        }
+      }
+    } catch (_) {}
+
+    return false;
+  })();
+
+  const guardPopups = isStreamSite || inPlayerFrame || ancestorIsStream;
+
   // Các domain quảng cáo phổ biến
   const adDomains = [
     'doubleclick.net',
@@ -110,10 +133,171 @@
         h === domain || h.endsWith(`.${domain}`)
       ) || /^adservice\.google\./.test(h);
 
-      return knownAdHost;
+      return knownAdHost || /\/c-cl\.php$/i.test(parsed.pathname);
     } catch (_) {
       return false;
     }
+  }
+
+  function isContentHost(host) {
+    const h = String(host || '').toLowerCase().replace(/\.$/, '');
+
+    if (!h) return false;
+    if (h === hostname) return true;
+
+    return [
+      'phimmotchill.bar',
+      'motchilltu.com',
+      'rophim10.cam',
+      'yeuphim.biz',
+      'devwithai.net',
+      'youtube.com',
+      'youtube-nocookie.com'
+    ].some(domain => h === domain || h.endsWith(`.${domain}`));
+  }
+
+  function isNewTabTarget(target) {
+    const name = String(target ?? '').trim();
+    const lower = name.toLowerCase();
+
+    if (!name || lower === '_blank' || lower === '_new') return true;
+    if (lower === '_self' || lower === '_parent' || lower === '_top') {
+      return false;
+    }
+
+    try {
+      if (window.frames && window.frames[name]) return false;
+    } catch (_) {}
+
+    return true;
+  }
+
+  function isBlankPopupURL(raw) {
+    return (
+      raw === '' ||
+      /^about:/i.test(raw) ||
+      /^javascript:/i.test(raw) ||
+      /^data:/i.test(raw) ||
+      /^blob:/i.test(raw)
+    );
+  }
+
+  // open/script: mọi tab mới trên trang phim. click: vẫn cho mở link cùng site.
+  function shouldBlockPopup(url, target, source) {
+    const raw = url == null ? '' : String(url).trim();
+
+    if (raw && isAdURL(raw)) return true;
+    if (!guardPopups) return false;
+    if (isBlankPopupURL(raw)) return true;
+    if (!isNewTabTarget(target)) return false;
+    if (source === 'open' || source === 'script') return true;
+
+    try {
+      const parsed = new URL(raw, location.href);
+
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return true;
+      }
+
+      return !isContentHost(parsed.hostname);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function effectiveTarget(element) {
+    const own = (element.getAttribute('target') || '').trim().toLowerCase();
+    if (own) return own;
+
+    const base = document.querySelector('base[target]');
+    return (base?.getAttribute('target') || '').trim().toLowerCase();
+  }
+
+  const nativeSetAttribute = Element.prototype.setAttribute;
+
+  function neutralizeBlankBase() {
+    if (!guardPopups) return;
+
+    document.querySelectorAll('base[target]').forEach(base => {
+      const target = (base.getAttribute('target') || '').trim().toLowerCase();
+
+      if (target === '_blank' || target === '_new') {
+        nativeSetAttribute.call(base, 'target', '_self');
+      }
+    });
+  }
+
+  // Cửa sổ giả để trang vẫn chạy phim, không chuyển tab hiện tại sang quảng cáo
+  function inertPopup() {
+    function make(kind) {
+      const store = Object.create(null);
+      const fn = function () {
+        return proxy;
+      };
+      const proxy = new Proxy(fn, {
+        get(_target, prop) {
+          if (prop === 'then') return undefined;
+          if (prop === 'closed') return false;
+          if (prop === Symbol.toStringTag) {
+            if (kind === 'location') return 'Location';
+            if (kind === 'window') return 'Window';
+            return 'Object';
+          }
+          if (prop === Symbol.toPrimitive) {
+            return () => (kind === 'location' ? 'about:blank' : '');
+          }
+          if (prop === 'toString') {
+            return () => (
+              kind === 'location' ? String(store.href || 'about:blank') : ''
+            );
+          }
+          if (kind === 'location' && prop === 'href') {
+            return store.href || 'about:blank';
+          }
+          if (Object.prototype.hasOwnProperty.call(store, prop)) {
+            return store[prop];
+          }
+          if (typeof prop === 'symbol') return undefined;
+
+          const child = prop === 'location'
+            ? 'location'
+            : prop === 'document'
+              ? 'node'
+              : 'node';
+
+          store[prop] = make(child);
+          return store[prop];
+        },
+        set(_target, prop, value) {
+          if (prop === 'closed') return true;
+
+          if (kind === 'window' && prop === 'location') {
+            const loc = store.location || make('location');
+            store.location = loc;
+            loc.href = value;
+            return true;
+          }
+
+          if (kind === 'location' && prop === 'href') {
+            store.href = value == null ? '' : String(value);
+            return true;
+          }
+
+          store[prop] = value;
+          return true;
+        },
+        apply() {
+          return proxy;
+        },
+        construct() {
+          return proxy;
+        }
+      });
+
+      return proxy;
+    }
+
+    return make('window');
   }
 
   // Selector ẩn quảng cáo HTML
@@ -380,29 +564,133 @@
     } catch (_) {}
   }
 
-  // Chặn popup nếu đích là domain quảng cáo
-  const originalOpen = window.open;
+  // Chặn tab mới: about:blank, domain quảng cáo, và popup lúc bấm play
+  if (guardPopups && typeof HTMLBaseElement !== 'undefined') {
+    Element.prototype.setAttribute = function (name, value) {
+      const attr = String(name || '').toLowerCase();
+      const next = value == null ? '' : String(value);
+
+      if (
+        attr === 'target' &&
+        this instanceof HTMLBaseElement &&
+        /^_(?:blank|new)$/i.test(next.trim())
+      ) {
+        return;
+      }
+
+      return nativeSetAttribute.call(this, name, value);
+    };
+
+    try {
+      const baseTarget = Object.getOwnPropertyDescriptor(
+        HTMLBaseElement.prototype,
+        'target'
+      );
+
+      if (baseTarget?.set && baseTarget.get) {
+        Object.defineProperty(HTMLBaseElement.prototype, 'target', {
+          configurable: true,
+          enumerable: baseTarget.enumerable,
+          get() {
+            return baseTarget.get.call(this);
+          },
+          set(value) {
+            const next = value == null ? '' : String(value);
+
+            if (/^_(?:blank|new)$/i.test(next.trim())) return;
+
+            baseTarget.set.call(this, value);
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  const nativeOpen = window.open;
+
+  function guardedOpen(url, name, specs) {
+    try {
+      if (shouldBlockPopup(url, name, 'open')) {
+        console.debug(
+          '[Clean Ads] Blocked popup:',
+          String(url ?? '')
+        );
+        return inertPopup();
+      }
+    } catch (error) {
+      console.debug('[Clean Ads] Popup check failed:', error);
+    }
+
+    const owner = this instanceof Window ? this : window;
+    return nativeOpen.call(owner, url, name, specs);
+  }
 
   try {
-  window.open = function (url, ...args) {
-    const raw = url == null ? '' : String(url);
+    Object.defineProperty(window, 'open', {
+      configurable: true,
+      enumerable: true,
+      get() {
+        return guardedOpen;
+      },
+      set() {}
+    });
+  } catch (_) {
+    window.open = guardedOpen;
+  }
 
-    if (raw && isAdURL(raw)) return null;
-
-    return originalOpen.call(this, url, ...args);
-  };
+  try {
+    Object.defineProperty(Window.prototype, 'open', {
+      configurable: true,
+      writable: true,
+      value: guardedOpen
+    });
   } catch (_) {}
 
   // Popunder thường gọi a.click() trên thẻ ẩn, không phải cú click của người dùng
-  if (isStreamSite && typeof HTMLAnchorElement !== 'undefined') {
+  if (typeof HTMLAnchorElement !== 'undefined') {
     const originalAnchorClick = HTMLAnchorElement.prototype.click;
 
     HTMLAnchorElement.prototype.click = function () {
       try {
+        neutralizeBlankBase();
+
+        const targetAttr = effectiveTarget(this);
+        const newTab = targetAttr === '_blank' || targetAttr === '_new';
+        const raw = (this.getAttribute('href') || '').trim();
+
+        if (
+          newTab &&
+          raw &&
+          raw !== '#' &&
+          shouldBlockPopup(this.href || raw, '_blank', 'script')
+        ) {
+          console.debug('[Clean Ads] Blocked scripted tab:', this.href);
+          return;
+        }
+
         if (this.href && isAdURL(this.href)) return;
       } catch (_) {}
 
       return originalAnchorClick.apply(this, arguments);
+    };
+  }
+
+  if (guardPopups && typeof HTMLFormElement !== 'undefined') {
+    const originalSubmit = HTMLFormElement.prototype.submit;
+
+    HTMLFormElement.prototype.submit = function () {
+      try {
+        const targetAttr = effectiveTarget(this);
+
+        if (
+          (targetAttr === '_blank' || targetAttr === '_new') &&
+          shouldBlockPopup(this.action, '_blank', 'script')
+        ) {
+          return;
+        }
+      } catch (_) {}
+
+      return originalSubmit.apply(this, arguments);
     };
   }
 
@@ -424,15 +712,50 @@
     };
   }
 
-  // Chặn click vào link quảng cáo đã nhận diện
-  document.addEventListener('click', event => {
-    const target =
+  function anchorFromEvent(event) {
+    if (typeof event.composedPath === 'function') {
+      for (const node of event.composedPath()) {
+        if (
+          node instanceof HTMLAnchorElement &&
+          node.hasAttribute('href')
+        ) {
+          return node;
+        }
+      }
+    }
+
+    const element =
       event.target instanceof Element
         ? event.target
         : event.target?.parentElement;
 
-    const anchor = target?.closest('a[href]');
+    return element?.closest?.('a[href]') || null;
+  }
 
+  function opensBlockedTab(anchor, event) {
+    neutralizeBlankBase();
+
+    const targetAttr = effectiveTarget(anchor);
+    const newTab =
+      event.type === 'auxclick' ||
+      event.button === 1 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      targetAttr === '_blank' ||
+      targetAttr === '_new';
+
+    if (!newTab) return false;
+
+    const raw = (anchor.getAttribute('href') || '').trim();
+    if (!raw || raw === '#') return false;
+
+    return shouldBlockPopup(anchor.href || raw, '_blank', 'click');
+  }
+
+  // Chặn click vào link quảng cáo, và tab mới lúc bấm play
+  function handlePopupClick(event) {
+    const anchor = anchorFromEvent(event);
     if (!anchor) return;
 
     const inAdSlot = Boolean(anchor.closest(
@@ -442,12 +765,36 @@
 
     const sponsored = /\bsponsored\b/i.test(anchor.rel || '');
 
-    const reviveClick = /\/c-cl\.php/i.test(anchor.href);
+    const reviveClick = /\/c-cl\.php/i.test(anchor.href || '');
 
     if (
       isAdURL(anchor.href) ||
       reviveClick ||
       (isStreamSite && (inAdSlot || sponsored))
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    if (opensBlockedTab(anchor, event)) {
+      event.preventDefault();
+      console.debug('[Clean Ads] Blocked new tab:', anchor.href);
+    }
+  }
+
+  document.addEventListener('click', handlePopupClick, true);
+  document.addEventListener('auxclick', handlePopupClick, true);
+
+  document.addEventListener('submit', event => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const targetAttr = effectiveTarget(form);
+
+    if (
+      (targetAttr === '_blank' || targetAttr === '_new') &&
+      shouldBlockPopup(form.action, '_blank', 'click')
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -779,6 +1126,7 @@
 
     function scanStreamSite() {
       try {
+        neutralizeBlankBase();
         applyStyles();
         cleanStreamPage();
         skipEmbeddedPlayerAds();
