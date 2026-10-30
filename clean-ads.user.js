@@ -56,7 +56,10 @@
   const isRoPhim =
     /(^|\.)rophim10\.cam$/.test(hostname);
 
-  const isStreamSite = isPhimmotchill || isMotchillTu || isRoPhim;
+  const isMotchillHay =
+    /(^|\.)motchillhay\.mobi$/.test(hostname);
+
+  const isStreamSite = isPhimmotchill || isMotchillTu || isRoPhim || isMotchillHay;
 
   const isEmbeddedFrame = (() => {
     try {
@@ -77,7 +80,8 @@
   const fromStreamSite =
     /(^|\.)phimmotchill\.bar$/.test(referrerHost) ||
     /(^|\.)motchilltu\.com$/.test(referrerHost) ||
-    /(^|\.)rophim10\.cam$/.test(referrerHost);
+    /(^|\.)rophim10\.cam$/.test(referrerHost) ||
+    /(^|\.)motchillhay\.mobi$/.test(referrerHost);
 
   const isPlayerHost =
     /(^|\.)yeuphim\.biz$/.test(hostname) ||
@@ -98,7 +102,8 @@
         if (
           /(^|\.)phimmotchill\.bar$/.test(host) ||
           /(^|\.)motchilltu\.com$/.test(host) ||
-          /(^|\.)rophim10\.cam$/.test(host)
+          /(^|\.)rophim10\.cam$/.test(host) ||
+          /(^|\.)motchillhay\.mobi$/.test(host)
         ) {
           return true;
         }
@@ -968,7 +973,7 @@
         h === domain || h.endsWith(`.${domain}`)
       ) || /^adservice\.google\./.test(h);
 
-      return knownAdHost || /\/c-cl\.php$/i.test(parsed.pathname);
+      return knownAdHost || /\/c-(?:cl|asyncjs)\.php$/i.test(parsed.pathname);
     } catch (_) {
       return false;
     }
@@ -984,6 +989,7 @@
       'phimmotchill.bar',
       'motchilltu.com',
       'rophim10.cam',
+      'motchillhay.mobi',
       'yeuphim.biz',
       'devwithai.net',
       'youtube.com',
@@ -1265,8 +1271,12 @@
     '[class*="ads-modal" i]',
     '[class*="popunder" i]',
     '[id*="popunder" i]',
-    '[class*="catfish" i]',
-    '[id*="catfish" i]',
+    '[class*="catfish-" i]',
+    '[class*="catfish_" i]',
+    '[class~="catfish" i]',
+    '[id*="catfish-" i]',
+    '[id*="catfish_" i]',
+    '[id="catfish" i]',
     '[class*="quangcao" i]',
     '[class*="quang-cao" i]',
     '[id*="quangcao" i]',
@@ -1310,6 +1320,18 @@
     '.afs_ads',
     'img[src*="/ads/"]',
     'a[rel~="sponsored"]'
+  ];
+
+  const motchillHaySelectors = [
+    '.catfish-banner',
+    '.site-header-promo',
+    '.revive-frame',
+    'section[data-placement="banner"]',
+    'section[data-placement="inline"]',
+    'section[data-placement="sidebar"]',
+    'ins[data-revive-id]',
+    'a[href*="c-cl.php"]',
+    'a[href*="c-asyncjs.php"]'
   ];
 
   const rophimSelectors = [
@@ -1421,6 +1443,7 @@
       ...(isPhimmotchill ? phimmotchillSelectors : []),
       ...(isMotchillTu ? motchillTuSelectors : []),
       ...(isRoPhim ? rophimSelectors : []),
+      ...(isMotchillHay ? motchillHaySelectors : []),
       ...(inPlayerFrame ? playerFrameSelectors : []),
       ...loadCustomSelectors()
     ];
@@ -2462,7 +2485,9 @@
 
     const inAdSlot = Boolean(anchor.closest(
       '.sspp-area,.adserver,.cat-a,.cat-header,.aam-banner,' +
-      '.ad-popup,.ads-catfish-item,.ads-popup-banner,[data-ad-slot]'
+      '.ad-popup,.ads-catfish-item,.ads-popup-banner,[data-ad-slot],' +
+      '.catfish-banner,.site-header-promo,.revive-frame,' +
+      'section[data-placement]'
     ));
 
     const sponsored = /\bsponsored\b/i.test(anchor.rel || '');
