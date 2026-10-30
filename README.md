@@ -2,7 +2,7 @@
 
 Userscript ẩn quảng cáo phổ biến, xử lý popup và thử bỏ qua quảng cáo video. Cài xong là tự chạy.
 
-Script tải bộ lọc AdGuard Base và AdGuard Popups, giữ bản đã biên dịch khoảng 4 ngày, rồi chặn domain quảng cáo và ẩn phần tử theo các rule đó. Lần đầu mở trang có thể tải vài MB. Scriptlet của AdGuard không chạy ở đây; YouTube và player phim vẫn dùng phần bỏ qua quảng cáo riêng.
+Script tải bộ lọc AdGuard Base và AdGuard Popups, giữ bản đã biên dịch khoảng 4 ngày, rồi chặn domain quảng cáo và ẩn phần tử theo các rule đó. Trên mọi trang, script còn ẩn banner và khung quảng cáo đè lên nội dung (modal, dải dính trên/dưới), và chặn tab mới do trang tự mở. Link bạn bấm trong nội dung vẫn mở được. Lần đầu mở trang có thể tải vài MB. Scriptlet của AdGuard không chạy ở đây; YouTube và player phim vẫn dùng phần bỏ qua quảng cáo riêng.
 
 **Link cài đặt:** [Clean Ads – GitHub Gist](https://gist.github.com/chnirt/fa5a2886949e1e72da908d8bcfabf144#file-clean-ads-user-js)
 

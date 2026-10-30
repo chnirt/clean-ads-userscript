@@ -1,7 +1,7 @@
 
 // ==UserScript==
 // @name         Clean Ads - YouTube + Phimmotchill
-// @description  Hide ads on YouTube, Phimmotchill, Motchill and RoPhim with AdGuard Base and Popups filters, skip player ads, and block ad popups and blank new tabs
+// @description  Hide overlay and banner ads on every site with AdGuard filters, skip player ads, and block ad popups plus scripted new tabs
 // @match        *://*/*
 // @run-at       document-start
 // @inject-into  page
@@ -962,6 +962,7 @@
       const h = parsed.hostname.toLowerCase().replace(/\.$/, '');
 
       if (adguardBlocks(h, parsed)) return true;
+      if (isGoogleAdClick(parsed)) return true;
 
       const knownAdHost = adDomains.some(domain =>
         h === domain || h.endsWith(`.${domain}`)
@@ -990,6 +991,89 @@
     ].some(domain => h === domain || h.endsWith(`.${domain}`));
   }
 
+  // Popup người dùng chủ đích (đăng nhập, chia sẻ, thanh toán), không phải quảng cáo.
+  const benignHosts = [
+    'appleid.apple.com',
+    'apps.apple.com',
+    'itunes.apple.com',
+    'play.google.com',
+    'facebook.com',
+    'fb.com',
+    'twitter.com',
+    'x.com',
+    'paypal.com',
+    'stripe.com',
+    'microsoftonline.com',
+    'live.com',
+    'github.com',
+    'linkedin.com',
+    'reddit.com',
+    't.me',
+    'telegram.me',
+    'telegram.org',
+    'wa.me',
+    'whatsapp.com',
+    'pinterest.com',
+    'discord.com',
+    'zoom.us',
+    'dropbox.com',
+    'vimeo.com',
+    'spotify.com',
+    'soundcloud.com',
+    'twitch.tv',
+    'dailymotion.com',
+    'instagram.com',
+    'youtu.be',
+    'recaptcha.net',
+    'gstatic.com',
+    'googleusercontent.com',
+    'googleapis.com',
+    'googletagmanager.com',
+    'google-analytics.com',
+    'tawk.to',
+    'crisp.chat',
+    'intercom.io',
+    'intercomcdn.com',
+    'zdassets.com',
+    'zopim.com',
+    'livechatinc.com',
+    'hotjar.com'
+  ];
+
+  function isGoogleAdClick(parsed) {
+    const h = String(parsed.hostname || '').toLowerCase();
+
+    if (!/(^|\.)google\./.test(h)) return false;
+
+    return /^\/(aclk|pagead)(\/|$)/i.test(parsed.pathname || '');
+  }
+
+  function isBenignHost(host) {
+    const h = String(host || '').toLowerCase().replace(/\.$/, '');
+
+    if (!h) return false;
+    if (
+      h.endsWith('.google.com') &&
+      /^(?:adservice|ads|ad|pagead\d*)\./.test(h)
+    ) {
+      return false;
+    }
+    if (h === 'google.com' || h.endsWith('.google.com')) return true;
+
+    return benignHosts.some(domain => h === domain || h.endsWith(`.${domain}`));
+  }
+
+  function isAllowedPopupHost(host, parsed) {
+    if (parsed && isGoogleAdClick(parsed)) return false;
+
+    const h = String(host || '').toLowerCase().replace(/\.$/, '');
+
+    if (!h) return false;
+    if (!isThirdPartyHost(h) || isContentHost(h)) return true;
+
+    return isBenignHost(h);
+  }
+
   function isNewTabTarget(target) {
     const name = String(target ?? '').trim();
     const lower = name.toLowerCase();
@@ -1016,15 +1100,17 @@
     );
   }
 
-  // open/script: mọi tab mới trên trang phim. click: vẫn cho mở link cùng site.
+  // Trang phim: chặn mọi tab mới khác site nội dung.
+  // Trang khác: chặn tab do script tự mở sang site lạ. Link người dùng bấm vẫn mở.
   function shouldBlockPopup(url, target, source) {
     const raw = url == null ? '' : String(url).trim();
+    const scripted = source === 'open' || source === 'script';
 
     if (raw && isAdURL(raw)) return true;
-    if (!guardPopups) return false;
+    if (!scripted && !guardPopups) return false;
     if (isBlankPopupURL(raw)) return true;
     if (!isNewTabTarget(target)) return false;
-    if (source === 'open' || source === 'script') return true;
+    if (guardPopups && scripted) return true;
 
     try {
       const parsed = new URL(raw, location.href);
@@ -1033,7 +1119,10 @@
         return true;
       }
 
-      return !isContentHost(parsed.hostname);
+      if (guardPopups) return !isContentHost(parsed.hostname);
+      if (!scripted) return false;
+
+      return !isAllowedPopupHost(parsed.hostname, parsed);
     } catch (_) {
       return true;
     }
@@ -1154,7 +1243,43 @@
     '[id*="advertisement"]',
     '[class*="sponsored-content"]',
     '[aria-label*="Advertisement" i]',
-    '[aria-label*="Sponsored" i]'
+    '[aria-label*="Sponsored" i]',
+    '[aria-label*="Quảng cáo" i]',
+    '[id^="google_ads_iframe"]',
+    '[id^="aswift_"]',
+    '[data-ad-banner]',
+    '[data-ad-type]',
+    '[data-revive-id]',
+    '[class*="ad-banner" i]',
+    '[class*="ads-banner" i]',
+    '[class*="ad_banner" i]',
+    '[class*="ads_banner" i]',
+    '[class*="banner-ad" i]',
+    '[class*="banner_ad" i]',
+    '[class*="ad-popup" i]',
+    '[class*="ads-popup" i]',
+    '[class*="popup-ad" i]',
+    '[class*="ad-overlay" i]',
+    '[class*="ads-overlay" i]',
+    '[class*="ad-modal" i]',
+    '[class*="ads-modal" i]',
+    '[class*="popunder" i]',
+    '[id*="popunder" i]',
+    '[class*="catfish" i]',
+    '[id*="catfish" i]',
+    '[class*="quangcao" i]',
+    '[class*="quang-cao" i]',
+    '[id*="quangcao" i]',
+    '[id*="quang-cao" i]',
+    '[class*="banner-qc" i]',
+    '[id*="banner-qc" i]',
+    '[class*="qc-banner" i]',
+    '[id*="qc-banner" i]',
+    '[class*="sticky-ad" i]',
+    '[class*="ad-sticky" i]',
+    'img[alt="Quảng cáo" i]',
+    'img[alt*="advertisement" i]',
+    'a[rel~="sponsored"]'
   ];
 
   const phimmotchillSelectors = [
@@ -1301,7 +1426,9 @@
     ];
 
     const next =
-      `${selectors.join(',\n')}{display:none!important;visibility:hidden!important;}\n${adguardCssText}`;
+      `${selectors.join(',\n')}{display:none!important;visibility:hidden!important;}\n` +
+      '[data-clean-ads-hide]{display:none!important;visibility:hidden!important;pointer-events:none!important;}\n' +
+      `${adguardCssText}`;
 
     if (style.textContent !== next) style.textContent = next;
 
@@ -1462,14 +1589,32 @@
 
   const nativeOpen = page.open;
 
+  function looksLikeUserPopup(specs) {
+    const text = String(specs || '');
+    const width = /(?:^|[,\s])width\s*=\s*(\d+)/i.exec(text);
+    const height = /(?:^|[,\s])height\s*=\s*(\d+)/i.exec(text);
+
+    if (!width || !height) return false;
+
+    return Number(width[1]) >= 320 && Number(height[1]) >= 320;
+  }
+
   function guardedOpen(url, name, specs) {
     try {
       if (shouldBlockPopup(url, name, 'open')) {
-        console.debug(
-          '[Clean Ads] Blocked popup:',
-          String(url ?? '')
-        );
-        return inertPopup();
+        const raw = url == null ? '' : String(url).trim();
+        const allowBlankShell =
+          !guardPopups &&
+          isBlankPopupURL(raw) &&
+          looksLikeUserPopup(specs);
+
+        if (!allowBlankShell) {
+          console.debug(
+            '[Clean Ads] Blocked popup:',
+            String(url ?? '')
+          );
+          return inertPopup();
+        }
       }
     } catch (error) {
       console.debug('[Clean Ads] Popup check failed:', error);
@@ -1516,7 +1661,13 @@
           newTab &&
           raw &&
           raw !== '#' &&
-          shouldBlockPopup(this.href || raw, '_blank', 'script')
+          shouldBlockPopup(this.href || raw, '_blank', 'script') &&
+          (
+            guardPopups ||
+            isUnseenBox(this) ||
+            coversViewport(this) ||
+            Boolean(adLayer(this))
+          )
         ) {
           console.debug('[Clean Ads] Blocked scripted tab:', this.href);
           return;
@@ -1529,7 +1680,7 @@
     };
   }
 
-  if (guardPopups && PageHTMLFormElement) {
+  if (PageHTMLFormElement) {
     const originalSubmit = PageHTMLFormElement.prototype.submit;
 
     PageHTMLFormElement.prototype.submit = function () {
@@ -1538,7 +1689,8 @@
 
         if (
           (targetAttr === '_blank' || targetAttr === '_new') &&
-          shouldBlockPopup(this.action, '_blank', 'script')
+          shouldBlockPopup(this.action, '_blank', 'script') &&
+          (guardPopups || isUnseenBox(this) || Boolean(adLayer(this)))
         ) {
           return;
         }
@@ -1635,6 +1787,573 @@
     }
   } catch (_) {}
 
+  // Lớp quảng cáo đè lên trang: modal, dải dính, banner nổi. Không gỡ node
+  // vì trang React sẽ vẽ lại và có thể vỡ.
+  const PLAYER_ROOT =
+    '.html5-video-player, #movie_player, .jwplayer, .video-js, .plyr--video';
+
+  const AD_TOKEN =
+    /(?:^|[^a-z0-9])(?:ads?|adverts?|advertisements?|popunders?|catfish|sponsored|quangcao|quang[-_]?cao|adsbygoogle|adslot|ad[-_ ]slot|banner[-_ ]ads?|ads?[-_ ]banners?|qc[-_ ]banner|banner[-_ ]qc)(?:[^a-z0-9]|$)/i;
+
+  const OVERLAY_CANDIDATE = [
+    'iframe',
+    'frame',
+    'ins',
+    'a[target="_blank"]',
+    'a[rel~="sponsored"]',
+    '[data-ad-slot]',
+    '[data-ad-client]',
+    '[data-ad-unit]',
+    '[data-revive-id]',
+    '[style*="fixed" i]',
+    '[class*="banner" i]',
+    '[class*="popup" i]',
+    '[class*="overlay" i]',
+    '[class*="catfish" i]',
+    '[class*="quang" i]',
+    '[role="dialog"]',
+    '[aria-modal="true"]'
+  ].join(',');
+
+  function elementClassName(el) {
+    return typeof el.className === 'string' ? el.className : '';
+  }
+
+  function isUnseenBox(element) {
+    if (!element || !element.getBoundingClientRect) return true;
+    if (!isVisible(element)) return true;
+
+    const rect = element.getBoundingClientRect();
+    const vw = window.innerWidth || 1;
+    const vh = window.innerHeight || 1;
+
+    if (rect.width < 2 || rect.height < 2) return true;
+    if (rect.bottom <= 0 || rect.right <= 0) return true;
+    if (rect.top >= vh || rect.left >= vw) return true;
+
+    return false;
+  }
+
+  function coversViewport(element) {
+    if (!element || !element.getBoundingClientRect) return false;
+
+    const rect = element.getBoundingClientRect();
+    const vw = window.innerWidth || 1;
+    const vh = window.innerHeight || 1;
+
+    return rect.width >= vw * 0.85 && rect.height >= vh * 0.5;
+  }
+
+  function hasOwnAdToken(el) {
+    if (
+      el.hasAttribute('data-ad-slot') ||
+      el.hasAttribute('data-ad-client') ||
+      el.hasAttribute('data-ad-unit') ||
+      el.hasAttribute('data-revive-id') ||
+      el.hasAttribute('data-ad')
+    ) {
+      return true;
+    }
+
+    const blob = [
+      el.id,
+      elementClassName(el),
+      el.getAttribute('aria-label') || ''
+    ].join(' ');
+
+    return AD_TOKEN.test(blob);
+  }
+
+  function creativeIsMain(layer, node, kind) {
+    let outer;
+    let inner;
+
+    try {
+      outer = layer.getBoundingClientRect();
+      inner = node.getBoundingClientRect();
+    } catch (_) {
+      return false;
+    }
+
+    if (outer.width < 8 || outer.height < 8) return false;
+    if (layer === node) return true;
+
+    // Lớp phủ kín màn hình: banner 300x250 ở giữa vẫn là quảng cáo.
+    if (kind === 'cover') return inner.width >= 120 && inner.height >= 36;
+    if (outer.height <= 320) return inner.width >= Math.min(120, outer.width * 0.5);
+
+    return inner.width * inner.height > outer.width * outer.height * 0.35;
+  }
+
+  function shown(el) {
+    if (!el || !el.isConnected) return false;
+
+    const css = getComputedStyle(el);
+
+    return css.display !== 'none' && css.visibility !== 'hidden';
+  }
+
+  function adFrame(el) {
+    const frames = [];
+
+    if (el.matches && el.matches('iframe, frame')) frames.push(el);
+
+    if (el.querySelectorAll) {
+      const found = el.querySelectorAll('iframe, frame');
+      const count = Math.min(found.length, 8);
+
+      for (let i = 0; i < count; i += 1) frames.push(found[i]);
+    }
+
+    for (const frame of frames) {
+      if (!shown(frame)) continue;
+
+      const rect = frame.getBoundingClientRect();
+      const attrW = parseInt(frame.getAttribute('width'), 10) || 0;
+      const attrH = parseInt(frame.getAttribute('height'), 10) || 0;
+      const sized =
+        (rect.width >= 120 && rect.height >= 36) ||
+        (attrW >= 120 && attrH >= 36);
+
+      if (!sized) continue;
+
+      const src = frame.getAttribute('src') || '';
+
+      if ((!src || isBlankPopupURL(src)) && rect.height <= 280) return frame;
+
+      try {
+        const parsed = new URL(src, location.href);
+
+        if (isAdURL(src)) return frame;
+        if (isBenignHost(parsed.hostname) || isContentHost(parsed.hostname)) {
+          continue;
+        }
+        if (isThirdPartyHost(parsed.hostname)) return frame;
+      } catch (_) {
+        if (src) return frame;
+      }
+    }
+
+    return null;
+  }
+
+  function collectLinks(el) {
+    const links = [];
+
+    if (el.matches && el.matches('a[href]')) links.push(el);
+
+    if (el.querySelectorAll) {
+      const found = el.querySelectorAll('a[href]');
+      const count = Math.min(found.length, 12);
+
+      for (let i = 0; i < count; i += 1) links.push(found[i]);
+    }
+
+    return links;
+  }
+
+  function hardAdLink(el) {
+    for (const link of collectLinks(el)) {
+      const href = link.href || link.getAttribute('href') || '';
+
+      if (isAdURL(href) || /\bsponsored\b/i.test(link.rel || '')) return link;
+    }
+
+    return null;
+  }
+
+  function softCreative(el) {
+    for (const link of collectLinks(el)) {
+      let parsed;
+
+      try {
+        parsed = new URL(link.href || link.getAttribute('href'), location.href);
+      } catch (_) {
+        continue;
+      }
+
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+      if (!isThirdPartyHost(parsed.hostname)) continue;
+      if (isBenignHost(parsed.hostname) || isContentHost(parsed.hostname)) {
+        continue;
+      }
+
+      const media = link.querySelector('img, video, picture, canvas');
+
+      if (media) {
+        const mediaRect = media.getBoundingClientRect();
+        const mediaW = parseInt(media.getAttribute('width'), 10) || 0;
+        const mediaH = parseInt(media.getAttribute('height'), 10) || 0;
+
+        if (
+          (mediaRect.width >= 120 && mediaRect.height >= 36) ||
+          (mediaW >= 120 && mediaH >= 36)
+        ) {
+          return link;
+        }
+      }
+
+      const rect = link.getBoundingClientRect();
+      if (rect.width < 160 || rect.height < 36) continue;
+      if (rect.width >= 240 && rect.height >= 48) return link;
+    }
+
+    const images = [];
+
+    if (el.matches && el.matches('img[alt]')) images.push(el);
+
+    if (el.querySelectorAll) {
+      const found = el.querySelectorAll('img[alt]');
+      const count = Math.min(found.length, 8);
+
+      for (let i = 0; i < count; i += 1) images.push(found[i]);
+    }
+
+    for (const img of images) {
+      const alt = img.getAttribute('alt') || '';
+
+      if (/quảng cáo|advertisement|sponsored/i.test(alt)) return img;
+    }
+
+    return null;
+  }
+
+  function hasAdLabel(el) {
+    const aria = `${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`;
+
+    if (/quảng cáo|advertisement|sponsored/i.test(aria)) return true;
+
+    let text = '';
+
+    try {
+      text = (el.innerText || '').replace(/\s+/g, ' ').trim();
+    } catch (_) {
+      return false;
+    }
+
+    if (!text || text.length > 80) return false;
+
+    return /quảng cáo|advertisement|sponsored/i.test(text);
+  }
+
+  function shortText(el) {
+    try {
+      const text = (el.innerText || '').replace(/\s+/g, ' ').trim();
+      return text.length > 240 ? '' : text;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function isConsent(el) {
+    const text = shortText(el);
+
+    if (!text) return false;
+    if (!/cookie|gdpr|\bconsent\b|privacy policy|quyền riêng tư|chấp nhận cookie|we use cookies/i.test(text)) {
+      return false;
+    }
+
+    return !hasOwnAdToken(el) && !hardAdLink(el) && !adFrame(el);
+  }
+
+  function isInteractiveDialog(el) {
+    if (!el.querySelector(
+      'input[type="password"], input[type="email"], input[type="search"], textarea'
+    )) {
+      return false;
+    }
+
+    return !hasOwnAdToken(el) && !hardAdLink(el) && !adFrame(el);
+  }
+
+  function isSiteChrome(el) {
+    if (el.tagName === 'HEADER' || el.tagName === 'NAV') return true;
+    if (el.getAttribute('role') === 'banner') return true;
+
+    return Boolean(el.querySelector(
+      '#search, input[name="search_query"], input[type="search"]'
+    ));
+  }
+
+  function isPageShell(el) {
+    const id = (el.id || '').toLowerCase();
+
+    if (
+      id === 'app' ||
+      id === 'root' ||
+      id === '__next' ||
+      id === '___gatsby'
+    ) {
+      return true;
+    }
+
+    if (!el.querySelector('main, article')) return false;
+
+    try {
+      return (el.innerText || '').length > 700;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function mostlyCreative(el) {
+    try {
+      const text = (el.innerText || '').replace(/\s+/g, ' ').trim();
+      if (text.length > 180) return false;
+    } catch (_) {
+      return false;
+    }
+
+    return Boolean(el.querySelector('img, video, picture, canvas, iframe'));
+  }
+
+  function layerKind(el) {
+    if (!(el instanceof HTMLElement)) return '';
+    if (el === document.body || el === document.documentElement) return '';
+
+    const css = getComputedStyle(el);
+
+    if (css.display === 'none' || css.visibility === 'hidden') return '';
+    if (css.position !== 'fixed' && css.position !== 'sticky') return '';
+
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth || 1;
+    const vh = window.innerHeight || 1;
+
+    if (rect.width < 48 || rect.height < 24) return '';
+    if (rect.width >= vw * 0.85 && rect.height >= vh * 0.65) return 'cover';
+
+    const fullWidth = rect.width >= vw * 0.65;
+
+    if (
+      fullWidth &&
+      rect.height >= 36 &&
+      rect.height <= 280 &&
+      rect.bottom >= vh - 16 &&
+      rect.top >= vh - 320
+    ) {
+      return 'bottom';
+    }
+
+    if (
+      css.position === 'fixed' &&
+      fullWidth &&
+      rect.height >= 36 &&
+      rect.height <= 200 &&
+      rect.top <= 8 &&
+      rect.bottom <= 220
+    ) {
+      return 'top';
+    }
+
+    if (
+      css.position === 'fixed' &&
+      rect.width >= 200 &&
+      rect.height >= 80 &&
+      rect.width <= vw * 0.96 &&
+      rect.height <= vh * 0.92 &&
+      rect.bottom > 40 &&
+      rect.right > 40 &&
+      rect.top < vh - 20 &&
+      rect.left < vw - 20
+    ) {
+      return 'card';
+    }
+
+    return '';
+  }
+
+  function containsAdMarker(el) {
+    try {
+      return Boolean(el.querySelector([
+        'img[alt*="quảng cáo" i]',
+        'img[alt*="advertisement" i]',
+        'img[alt*="sponsored" i]',
+        '[data-ad-slot]',
+        '[data-ad-client]',
+        '[data-ad-unit]',
+        '[data-revive-id]',
+        'ins.adsbygoogle',
+        '.adsbygoogle',
+        'a[rel~="sponsored"]'
+      ].join(',')));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function textLength(el) {
+    try {
+      return (el.innerText || '').replace(/\s+/g, ' ').trim().length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function hasAdEvidence(el, kind) {
+    if (hasOwnAdToken(el) || hasAdLabel(el)) return true;
+
+    if (kind !== 'top' && containsAdMarker(el) && textLength(el) < 180) {
+      return true;
+    }
+
+    const frame = adFrame(el);
+    if (frame && creativeIsMain(el, frame, kind)) return true;
+
+    const hard = hardAdLink(el);
+    if (hard && creativeIsMain(el, hard, kind)) return true;
+    if (kind === 'top') return false;
+
+    const soft = softCreative(el);
+    if (!soft || !creativeIsMain(el, soft, kind)) return false;
+    if (kind === 'card') return mostlyCreative(el);
+
+    return true;
+  }
+
+  function adLayer(start) {
+    if (!(start instanceof Element)) return null;
+    if (start.closest(PLAYER_ROOT)) return null;
+
+    let current = start;
+    let cover = null;
+
+    for (let depth = 0; current && depth < 10; depth += 1) {
+      if (current === document.body || current === document.documentElement) {
+        break;
+      }
+
+      if (isConsent(current) || isInteractiveDialog(current) || isSiteChrome(current)) {
+        current = current.parentElement;
+        continue;
+      }
+
+      const kind = layerKind(current);
+
+      if (kind && !isPageShell(current) && hasAdEvidence(current, kind)) {
+        if (kind === 'cover') cover = current;
+        else return current;
+      }
+
+      current = current.parentElement;
+    }
+
+    return cover;
+  }
+
+  function releaseOverlayScroll() {
+    if (!document.body) return;
+
+    const dialogs = document.querySelectorAll(
+      'dialog[open], .modal.show, [role="dialog"], [aria-modal="true"]'
+    );
+
+    for (const dialog of dialogs) {
+      if (dialog.hasAttribute('data-clean-ads-hide')) continue;
+      if (isVisible(dialog)) return;
+    }
+
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    document.documentElement.style.removeProperty('overflow');
+  }
+
+  function markHidden(el) {
+    if (!(el instanceof HTMLElement)) return;
+    if (el === document.body || el === document.documentElement) return;
+    if (el.hasAttribute('data-clean-ads-hide')) return;
+
+    const kind = layerKind(el);
+
+    el.setAttribute('data-clean-ads-hide', '');
+    console.debug(
+      '[Clean Ads] Hid overlay ad:',
+      el.id || elementClassName(el) || el.tagName
+    );
+
+    if (kind === 'cover') releaseOverlayScroll();
+  }
+
+  function hideCoveringAds() {
+    if (!document.body) return;
+
+    let nodes;
+
+    try {
+      nodes = document.body.querySelectorAll(OVERLAY_CANDIDATE);
+    } catch (_) {
+      return;
+    }
+
+    const limit = Math.min(nodes.length, 300);
+
+    for (let i = 0; i < limit; i += 1) {
+      const node = nodes[i];
+
+      if (node.closest('[data-clean-ads-hide]')) continue;
+      if (node.closest(PLAYER_ROOT)) continue;
+
+      const layer = adLayer(node);
+      if (layer) markHidden(layer);
+    }
+  }
+
+  let overlayQueued = false;
+  let overlayLast = 0;
+
+  function scheduleOverlayScan() {
+    if (document.hidden || overlayQueued) return;
+
+    overlayQueued = true;
+
+    const wait = Math.max(0, 700 - (Date.now() - overlayLast));
+
+    setTimeout(() => {
+      overlayQueued = false;
+      overlayLast = Date.now();
+
+      try {
+        hideCoveringAds();
+      } catch (error) {
+        console.debug('[Clean Ads] Overlay scan failed:', error);
+      }
+    }, wait);
+  }
+
+  function watchOverlayAds() {
+    scheduleOverlayScan();
+
+    const root = document.documentElement || document;
+
+    const overlayObserver = new MutationObserver(records => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof Element)) continue;
+
+          try {
+            if (
+              node.matches(OVERLAY_CANDIDATE) ||
+              node.querySelector(OVERLAY_CANDIDATE)
+            ) {
+              scheduleOverlayScan();
+              return;
+            }
+          } catch (_) {}
+        }
+      }
+    });
+
+    overlayObserver.observe(root, {
+      childList: true,
+      subtree: true
+    });
+
+    setInterval(scheduleOverlayScan, 2000);
+  }
+
+  watchOverlayAds();
+
   function anchorFromEvent(event) {
     if (typeof event.composedPath === 'function') {
       for (const node of event.composedPath()) {
@@ -1676,8 +2395,68 @@
     return shouldBlockPopup(anchor.href || raw, '_blank', 'click');
   }
 
-  // Chặn click vào link quảng cáo, và tab mới lúc bấm play
+  // Tab mới từ banner phủ trang, hoặc từ nút play nằm trong link sang site khác.
+  function clickOpensForeignTab(anchor, event) {
+    const raw = (anchor.getAttribute('href') || '').trim();
+    if (!raw || raw === '#') return false;
+
+    const targetAttr = effectiveTarget(anchor);
+    const newTab =
+      event.type === 'auxclick' ||
+      event.button === 1 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      targetAttr === '_blank' ||
+      targetAttr === '_new';
+
+    if (!newTab) return false;
+
+    let thirdParty = false;
+
+    try {
+      const parsed = new URL(anchor.href || raw, location.href);
+
+      thirdParty =
+        isThirdPartyHost(parsed.hostname) &&
+        !isAllowedPopupHost(parsed.hostname, parsed);
+    } catch (_) {
+      thirdParty = true;
+    }
+
+    if (!thirdParty && !isAdURL(anchor.href || raw)) return false;
+    if (isUnseenBox(anchor) || coversViewport(anchor)) return true;
+
+    const target = event.target instanceof Element ? event.target : null;
+
+    return Boolean(
+      thirdParty &&
+      target &&
+      target !== anchor &&
+      target.closest('button, video, [role="button"], input')
+    );
+  }
+
+  // Chặn click vào link quảng cáo, lớp đè lên trang, và tab mới lúc bấm play
   function handlePopupClick(event) {
+    const origin =
+      event.target instanceof Element
+        ? event.target
+        : event.target?.parentElement;
+    const layer = origin ? adLayer(origin) : null;
+
+    if (layer) {
+      markHidden(layer);
+      event.preventDefault();
+
+      const playControl = origin.closest(
+        'button, video, [role="button"], input[type="button"], input[type="submit"]'
+      );
+
+      if (!playControl) event.stopImmediatePropagation();
+      return;
+    }
+
     const anchor = anchorFromEvent(event);
     if (!anchor) return;
 
@@ -1693,7 +2472,8 @@
     if (
       isAdURL(anchor.href) ||
       reviveClick ||
-      (isStreamSite && (inAdSlot || sponsored))
+      sponsored ||
+      (isStreamSite && inAdSlot)
     ) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -1702,7 +2482,14 @@
 
     if (opensBlockedTab(anchor, event)) {
       event.preventDefault();
+      event.stopImmediatePropagation();
       console.debug('[Clean Ads] Blocked new tab:', anchor.href);
+      return;
+    }
+
+    if (clickOpensForeignTab(anchor, event)) {
+      event.preventDefault();
+      console.debug('[Clean Ads] Blocked overlay tab:', anchor.href);
     }
   }
 
