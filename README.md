@@ -2,7 +2,7 @@
 
 Userscript ẩn quảng cáo phổ biến, xử lý popup và thử bỏ qua quảng cáo video. Cài xong là tự chạy.
 
-Script tải bộ lọc AdGuard Base và AdGuard Popups, giữ bản đã biên dịch khoảng 4 ngày, rồi chặn domain quảng cáo và ẩn phần tử theo các rule đó. Trên mọi trang, script còn ẩn banner và khung quảng cáo đè lên nội dung (modal, dải dính trên/dưới), và chặn tab mới do trang tự mở. Link bạn bấm trong nội dung vẫn mở được. Lần đầu mở trang có thể tải vài MB. Scriptlet của AdGuard không chạy ở đây; YouTube và player phim vẫn dùng phần bỏ qua quảng cáo riêng.
+Script chạy trên YouTube và trang xem phim. Trang phim không cần khai báo từng domain: cùng họ tên miền vẫn khớp khi đổi đuôi (`motchill*`, `rophim` kèm số, `phimmoi*`, `phimmotchill`), URL có `/xem-phim/`, `tap-1`, hoặc mục phim lẻ/phim bộ cũng chạy. Trang chủ lạ được nhận nếu có player kèm danh sách tập, hoặc có nhiều link `/xem-phim/` cùng site — lần đầu script tải lại một lần rồi ghi nhớ domain đó. Iframe player nhận trang phim qua referrer. Trang khác không bị gắn bộ lọc, không chặn popup, không sửa player. Trên trang phim, script tải bộ lọc AdGuard Base và AdGuard Popups, giữ bản đã biên dịch khoảng 4 ngày, rồi chặn domain quảng cáo và ẩn banner. Lần đầu mở trang phim có thể tải vài MB. Scriptlet của AdGuard không chạy ở đây.
 
 **Link cài đặt:** [Clean Ads – GitHub Gist](https://gist.github.com/chnirt/5e115d82dceac44cad26632722d50370#file-clean-ads-remote-user-js)
 
@@ -29,7 +29,7 @@ Trên iPhone hãy dùng Safari ở mục dưới. Chrome iPhone không cài đư
 
 Không thấy lời nhắc cài thì kiểm tra địa chỉ có kết thúc bằng `.user.js`. Có thể tải file và chép vào thư mục Userscripts.
 
-Cần quyền mọi website vì quảng cáo player thường nằm ở domain khác trang phim.
+Quyền mọi website vẫn cần vì player phim thường nằm ở domain khác trang phim. Script tự thoát trên những trang không xem phim.
 
 ## Cập nhật
 
