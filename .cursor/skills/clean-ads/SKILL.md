@@ -36,7 +36,7 @@ The script matches every site. Gates are hostname flags, not extra `@match` line
 | `isMotchillTu` | Empty `aam_ads_data` and `plpData` |
 | `guardPopups` | Strict new-tab policy, `<base target="_blank">` neutralization |
 
-Current film hosts: `phimmotchill.bar`, `motchilltu.com`, `rophim10.cam`, `motchillhay.mobi`. Player hosts: `yeuphim.biz`, `devwithai.net`. YouTube includes `youtube-nocookie.com`.
+Current film hosts: `phimmotchill.bar`, `motchilltu.com`, `rophim10.cam`, `motchillhay.mobi`, `motchillx.cx`. Player hosts: `yeuphim.biz`, `devwithai.net`. YouTube includes `youtube-nocookie.com`. On `motchillx.cx`, `tracking-ubt-*.js` is an ad script: it covers the player with a transparent `z-index:2147483000` layer and opens `tikpeeaff.com`. Block that script path in `isAdURL`, and keep the layer in `motchillXSelectors`.
 
 `inPlayerFrame` is true on a player host, or in an iframe whose referrer is a stream site. `ancestorIsStream` checks `location.ancestorOrigins`. `guardPopups` is `isStreamSite || inPlayerFrame || ancestorIsStream`.
 

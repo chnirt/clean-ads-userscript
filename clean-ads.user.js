@@ -59,7 +59,11 @@
   const isMotchillHay =
     /(^|\.)motchillhay\.mobi$/.test(hostname);
 
-  const isStreamSite = isPhimmotchill || isMotchillTu || isRoPhim || isMotchillHay;
+  const isMotchillX =
+    /(^|\.)motchillx\.cx$/.test(hostname);
+
+  const isStreamSite =
+    isPhimmotchill || isMotchillTu || isRoPhim || isMotchillHay || isMotchillX;
 
   const isEmbeddedFrame = (() => {
     try {
@@ -81,7 +85,8 @@
     /(^|\.)phimmotchill\.bar$/.test(referrerHost) ||
     /(^|\.)motchilltu\.com$/.test(referrerHost) ||
     /(^|\.)rophim10\.cam$/.test(referrerHost) ||
-    /(^|\.)motchillhay\.mobi$/.test(referrerHost);
+    /(^|\.)motchillhay\.mobi$/.test(referrerHost) ||
+    /(^|\.)motchillx\.cx$/.test(referrerHost);
 
   const isPlayerHost =
     /(^|\.)yeuphim\.biz$/.test(hostname) ||
@@ -103,7 +108,8 @@
           /(^|\.)phimmotchill\.bar$/.test(host) ||
           /(^|\.)motchilltu\.com$/.test(host) ||
           /(^|\.)rophim10\.cam$/.test(host) ||
-          /(^|\.)motchillhay\.mobi$/.test(host)
+          /(^|\.)motchillhay\.mobi$/.test(host) ||
+          /(^|\.)motchillx\.cx$/.test(host)
         ) {
           return true;
         }
@@ -949,7 +955,8 @@
     'bidswitch.net',
     'criteo.com',
     'criteo.net',
-    'itvmovies.me'
+    'itvmovies.me',
+    'tikpeeaff.com'
   ];
 
   // Kiểm tra URL có thuộc domain quảng cáo không
@@ -973,7 +980,12 @@
         h === domain || h.endsWith(`.${domain}`)
       ) || /^adservice\.google\./.test(h);
 
-      return knownAdHost || /\/c-(?:cl|asyncjs)\.php$/i.test(parsed.pathname);
+      if (knownAdHost || /\/c-(?:cl|asyncjs)\.php$/i.test(parsed.pathname)) {
+        return true;
+      }
+
+      // tracking-ubt phủ lớp trong suốt lên player rồi mở popup.
+      return isMotchillX && /\/tracking-ubt[-.]/i.test(parsed.pathname);
     } catch (_) {
       return false;
     }
@@ -990,6 +1002,7 @@
       'motchilltu.com',
       'rophim10.cam',
       'motchillhay.mobi',
+      'motchillx.cx',
       'yeuphim.biz',
       'devwithai.net',
       'youtube.com',
@@ -1322,6 +1335,12 @@
     'a[rel~="sponsored"]'
   ];
 
+  const motchillXSelectors = [
+    '.afs_ads',
+    '[style*="z-index:2147483000"]',
+    '[style*="z-index: 2147483000"]'
+  ];
+
   const motchillHaySelectors = [
     '.catfish-banner',
     '.site-header-promo',
@@ -1444,6 +1463,7 @@
       ...(isMotchillTu ? motchillTuSelectors : []),
       ...(isRoPhim ? rophimSelectors : []),
       ...(isMotchillHay ? motchillHaySelectors : []),
+      ...(isMotchillX ? motchillXSelectors : []),
       ...(inPlayerFrame ? playerFrameSelectors : []),
       ...loadCustomSelectors()
     ];
@@ -1607,6 +1627,33 @@
           }
         });
       }
+    } catch (_) {}
+  }
+
+  // motchillx: tracking-ubt gắn lớp trong suốt z-index 2147483000 lên player.
+  if (isMotchillX && page.Node && page.Node.prototype) {
+    const isClickjackNode = node => {
+      if (!(node instanceof Element)) return false;
+
+      return /2147483000/.test(node.getAttribute('style') || '');
+    };
+
+    const guardInsert = native => function (node) {
+      try {
+        if (isClickjackNode(node)) return node;
+      } catch (_) {}
+
+      return native.apply(this, arguments);
+    };
+
+    try {
+      const nativeAppend = page.Node.prototype.appendChild;
+      page.Node.prototype.appendChild = guardInsert(nativeAppend);
+    } catch (_) {}
+
+    try {
+      const nativeInsert = page.Node.prototype.insertBefore;
+      page.Node.prototype.insertBefore = guardInsert(nativeInsert);
     } catch (_) {}
   }
 
