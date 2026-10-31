@@ -4,7 +4,7 @@ Userscript ẩn quảng cáo phổ biến, xử lý popup và thử bỏ qua qu�
 
 Script tải bộ lọc AdGuard Base và AdGuard Popups, giữ bản đã biên dịch khoảng 4 ngày, rồi chặn domain quảng cáo và ẩn phần tử theo các rule đó. Trên mọi trang, script còn ẩn banner và khung quảng cáo đè lên nội dung (modal, dải dính trên/dưới), và chặn tab mới do trang tự mở. Link bạn bấm trong nội dung vẫn mở được. Lần đầu mở trang có thể tải vài MB. Scriptlet của AdGuard không chạy ở đây; YouTube và player phim vẫn dùng phần bỏ qua quảng cáo riêng.
 
-**Link cài đặt:** [Clean Ads – GitHub Gist](https://gist.github.com/chnirt/fa5a2886949e1e72da908d8bcfabf144#file-clean-ads-user-js)
+**Link cài đặt:** [Clean Ads – GitHub Gist](https://gist.github.com/chnirt/5e115d82dceac44cad26632722d50370#file-clean-ads-remote-user-js)
 
 ## Chrome (Mac / Windows)
 
@@ -14,7 +14,7 @@ Trên iPhone hãy dùng Safari ở mục dưới. Chrome iPhone không cài đư
 2. Mở `chrome://extensions/` → **Tampermonkey** → **Details** → bật **Allow User Scripts**.
    Không thấy mục này thì bật **Developer mode** ở góc trên phải, rồi kiểm tra lại.
    Chrome có thể cảnh báo extension chạy mã chưa được Google xem xét. Chỉ bật nếu bạn tin mã nguồn Clean Ads.
-3. Mở [Gist](https://gist.github.com/chnirt/fa5a2886949e1e72da908d8bcfabf144#file-clean-ads-user-js) → **Raw** → **Install**.
+3. Mở [Gist](https://gist.github.com/chnirt/5e115d82dceac44cad26632722d50370#file-clean-ads-remote-user-js) → **Raw** → **Install**.
 4. Icon Tampermonkey phải hiện Clean Ads đang bật. Tải lại trang (`Cmd + R` / `Ctrl + R`).
 
 ## Safari (iPhone / iPad / Mac)
@@ -23,7 +23,7 @@ Trên iPhone hãy dùng Safari ở mục dưới. Chrome iPhone không cài đư
 2. Bật extension:
    - iPhone/iPad: **Cài đặt → Safari → Extensions → Userscripts** (iOS mới: **Cài đặt → Ứng dụng → Safari → Extensions**). Chọn **Always Allow → All Websites**.
    - Mac: Safari → **Settings → Extensions** → bật Userscripts và cho phép mọi website.
-3. Mở [Gist](https://gist.github.com/chnirt/fa5a2886949e1e72da908d8bcfabf144#file-clean-ads-user-js) bằng Safari → **Raw**.
+3. Mở [Gist](https://gist.github.com/chnirt/5e115d82dceac44cad26632722d50370#file-clean-ads-remote-user-js) bằng Safari → **Raw**.
 4. iPhone: nút **aA** → **Userscripts** → cài. iPad/Mac: mở Userscripts và xác nhận cài.
 5. Tải lại trang cần dùng.
 
