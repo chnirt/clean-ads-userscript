@@ -11,7 +11,7 @@ description: >-
 
 # Clean Ads
 
-`clean-ads.user.js` is the script. `clean-ads-remote.user.js` only downloads that file from a gist and injects it into the page. Behavior changes belong in `clean-ads.user.js`. Leave the loader gist URL, grants, and `@connect` hosts alone unless the user asks to publish or change how the script is fetched.
+`clean-ads.user.js` is the built script. `clean-ads-remote.user.js` is two lines: download that file from the gist and inject it into the page. Edit `src/core.js` and `steps/*.js`, then run `node build.js`. Do not edit `clean-ads.user.js` by hand. Leave the loader gist URL, grants, and `@connect` hosts alone unless the user asks to publish or change how the script is fetched.
 
 The userscript header is the contract: `@match *://*/*`, `@run-at document-start`, `@inject-into page`, `@grant` for `GM_xmlhttpRequest`, `GM_getValue`, `GM_setValue`, `GM_deleteValue`, `unsafeWindow`, and `@connect filters.adtidy.org`. A new cross-origin fetch needs a matching `@connect` on the script that actually performs it. The remote loader runs in the extension sandbox and `eval`s the payload in the page, so `GM_*` may be missing inside `clean-ads.user.js`. Keep using the existing `gmGet` / `gmSet` / `gmDel` / `gmXhr` guards.
 
@@ -19,9 +19,21 @@ The userscript header is the contract: `@match *://*/*`, `@run-at document-start
 
 Resolve the page global once into `page` (`unsafeWindow`, else `window`). Patch `page` and `Page*` prototypes (`PageElement`, `PageWindow`, `PageHTMLAnchorElement`, `PageHTMLFormElement`, `PageHTMLBaseElement`). Patching the sandbox `window` does not affect the page when the remote loader injects the script.
 
-The file is one IIFE with `'use strict'`. No modules, bundler, or dependencies. New helpers stay inside the IIFE. Log with `console.debug` and the prefix `[Clean Ads]`. Wrap prototype and `GM_*` calls in `try/catch`. At `document-start`, `document.documentElement` may not exist yet; follow the existing root-observer pattern.
+The built file is one IIFE with `'use strict'`. No modules or dependencies. `build.js` only concatenates `src/core.js` with the `// @include` steps. New helpers stay inside that IIFE. Log with `console.debug` and the prefix `[Clean Ads]`. Wrap prototype and `GM_*` calls in `try/catch`. At `document-start`, `document.documentElement` may not exist yet; follow the existing root-observer pattern.
 
-`clean-ads.user.js` is the source of truth. README install text can drift from the code. Do not widen matching or blocking to match the README unless the user asks for that behavior, and do not rewrite the README unless the user-facing install story changes.
+`src/core.js` plus `steps/` is the source of truth. README install text can drift from the code. Do not widen matching or blocking to match the README unless the user asks for that behavior, and do not rewrite the README unless the user-facing install story changes.
+
+## Source layout
+
+| File | Role |
+|---|---|
+| `steps/01-adguard.js` | AdGuard Base + Popups compile, cache, and CSS |
+| `steps/02-motchill.js` | Brand `motchill`, extra selectors, motchilltu globals |
+| `steps/03-rophim.js` | Brand `rophim`, extra selectors for `rophim10.cam` |
+| `steps/04-phimmoi.js` | Brand `phimmoi` |
+| `src/core.js` | Shared popup, network, overlay, and player behavior |
+
+`filmBrands` is filled by the site steps. `hostIsFilmBrand` matches a hostname label that contains one of those fragments. A site step's exact host only adds selectors or a page hack. `siteRules` supply those selectors to `applyStyles`.
 
 ## What runs where
 
@@ -31,29 +43,31 @@ The script matches every site. Gates are hostname flags, not extra `@match` line
 |---|---|
 | Always | `#clean-ads-style`, `baseSelectors`, custom selectors, AdGuard cache/refresh, `cleanNode` observer, `fetch` / XHR / beacon / `src` blocks, `window.open`, anchor `click` and form `submit` hooks, overlay scan, 3-second hold-to-hide |
 | `isYouTube` | YouTube skip interval and `youtubeSelectors` |
-| `isStreamSite` | Per-site selector lists, `cleanStreamPage` |
+| `isStreamSite` | `siteRules` selectors, `motchillXSelectors`, `cleanStreamPage` |
 | `inPlayerFrame` | `__tvcUrl__` / `__tvcLink__` / `__ADS_PAUSED_UNTIL__` locks, `playerFrameSelectors`, `skipEmbeddedPlayerAds` |
-| `isMotchillTu` | Empty `aam_ads_data` and `plpData` |
+| `motchilltu.com` | Empty `aam_ads_data` and `plpData` in `steps/02-motchill.js` |
 | `guardPopups` | Strict new-tab policy, `<base target="_blank">` neutralization |
 
-Current film hosts: `phimmotchill.bar`, `motchilltu.com`, `rophim10.cam`, `motchillhay.mobi`, `motchillx.cx`. Player hosts: `yeuphim.biz`, `devwithai.net`. YouTube includes `youtube-nocookie.com`. On `motchillx.cx`, `tracking-ubt-*.js` is an ad script: it covers the player with a transparent `z-index:2147483000` layer and opens `tikpeeaff.com`. Block that script path in `isAdURL`, and keep the layer in `motchillXSelectors`.
+`hostIsFilmBrand` is the film gate. A hostname label that contains `motchill`, `phimmoi`, or `rophim` is a stream site, including a renamed TLD (`motchillx.cx`, `rophim11.net`, `phimmoic.bz`, `phimmotchill.bar`). Subdomains count because every label is checked. Player hosts stay exact: `yeuphim.biz`, `devwithai.net`. YouTube includes `youtube-nocookie.com`.
+
+On those film sites, `tracking-ubt-*.js` is an ad script: it covers the player with a transparent `z-index:2147483000` layer and opens `tikpeeaff.com`. Block that script path in `isAdURL`, and keep the layer in `motchillXSelectors`.
+
+Exact hosts (`phimmotchill.bar`, `motchilltu.com`, `rophim10.cam`, `motchillhay.mobi`) live in the site step and only choose that site's extra selectors or page hack. Do not add another exact host for these three brands.
 
 `inPlayerFrame` is true on a player host, or in an iframe whose referrer is a stream site. `ancestorIsStream` checks `location.ancestorOrigins`. `guardPopups` is `isStreamSite || inPlayerFrame || ancestorIsStream`.
 
-`isContentHost` treats the current host, the film hosts, the player hosts, and YouTube as first-party content. `isThirdPartyHost` compares registrable domains (`AG_MULTI_SUFFIX` covers `com.vn` and similar). A third-party content or player host must be listed in `isContentHost` or popups and AdGuard will treat it as an ad.
+`isContentHost` treats the current host, `hostIsFilmBrand`, the player hosts, and YouTube as first-party content. `isThirdPartyHost` compares registrable domains (`AG_MULTI_SUFFIX` covers `com.vn` and similar). A player host outside those brands must be listed in `isContentHost` or popups and AdGuard will treat it as an ad.
 
 ## Add a film site
 
-Update every one of these or the new host will hide banners but still open popups, or the opposite:
+`motchill`, `phimmoi`, and `rophim` already match because their step files push those fragments into `filmBrands`. That list feeds `hostIsFilmBrand`, then `isStreamSite`, `fromStreamSite`, `ancestorIsStream`, and `isContentHost`. Do not add another exact host for these three brands.
 
-1. Add `isNewSite` next to the other hostname flags. Include it in `isStreamSite`.
-2. Add the same pattern to `fromStreamSite` and `ancestorIsStream`.
-3. Add the registrable host to `isContentHost`.
-4. Add a selector array and spread it in `applyStyles` under that flag.
-5. If the player lives on a new domain, add that domain to `isPlayerHost` and `isContentHost`, and extend `skipEmbeddedPlayerAds` only for APIs that page actually exposes.
-6. If the page injects an ad config global before render, freeze it with `Object.defineProperty` on `page` the way `aam_ads_data` and `__tvcUrl__` are frozen. Guard with `try/catch`.
+A different brand:
 
-A renamed TLD of an existing site does not match. Flags are exact suffix tests.
+1. Add a `steps/` file that `filmBrands.push`s its label fragment, and `@include` it from `src/core.js` next to the other site steps.
+2. Push a `siteRules` entry whose `selectors(host)` returns that site's list only for the exact host. `applyStyles` already spreads `siteRules`.
+3. If the player lives on a domain that does not contain those labels, add it to `isPlayerHost` and `isContentHost`, and extend `skipEmbeddedPlayerAds` only for APIs that page actually exposes.
+4. If the page injects an ad config global before render, freeze it with `Object.defineProperty` on `page` the way `aam_ads_data` and `__tvcUrl__` are frozen. Guard with `try/catch`.
 
 ## Selectors and hiding
 
@@ -108,9 +122,10 @@ Embedded film player (`inPlayerFrame`): call `page.__ROPHIM_CANCEL_TVC__` when i
 
 ## Checks
 
-After an edit, confirm the file still parses:
+After an edit, rebuild and confirm the file still parses:
 
 ```bash
+node build.js
 node --check clean-ads.user.js
 ```
 

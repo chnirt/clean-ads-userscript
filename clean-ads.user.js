@@ -13,6 +13,8 @@
 // @connect      filters.adtidy.org
 // ==/UserScript==
 
+// Ghép bằng `node build.js` từ src/core.js và steps/. Sửa file nguồn rồi build lại.
+
 (() => {
   'use strict';
 
@@ -42,84 +44,20 @@
 
   const STORAGE_KEY = 'cleanAdsSelectors';
   const hostname = location.hostname.toLowerCase();
+  const filmBrands = [];
+  const siteRules = [];
 
-  const isYouTube =
-    /(^|\.)youtube\.com$/.test(hostname) ||
-    /(^|\.)youtube-nocookie\.com$/.test(hostname);
+  function hostIsFilmBrand(host) {
+    const labels = String(host || '')
+      .toLowerCase()
+      .replace(/\.$/, '')
+      .split('.')
+      .filter(Boolean);
 
-  const isPhimmotchill =
-    /(^|\.)phimmotchill\.bar$/.test(hostname);
-
-  const isMotchillTu =
-    /(^|\.)motchilltu\.com$/.test(hostname);
-
-  const isRoPhim =
-    /(^|\.)rophim10\.cam$/.test(hostname);
-
-  const isMotchillHay =
-    /(^|\.)motchillhay\.mobi$/.test(hostname);
-
-  const isMotchillX =
-    /(^|\.)motchillx\.cx$/.test(hostname);
-
-  const isStreamSite =
-    isPhimmotchill || isMotchillTu || isRoPhim || isMotchillHay || isMotchillX;
-
-  const isEmbeddedFrame = (() => {
-    try {
-      return page.top !== page.self;
-    } catch (_) {
-      return true;
-    }
-  })();
-
-  const referrerHost = (() => {
-    try {
-      return new URL(document.referrer).hostname.toLowerCase();
-    } catch (_) {
-      return '';
-    }
-  })();
-
-  const fromStreamSite =
-    /(^|\.)phimmotchill\.bar$/.test(referrerHost) ||
-    /(^|\.)motchilltu\.com$/.test(referrerHost) ||
-    /(^|\.)rophim10\.cam$/.test(referrerHost) ||
-    /(^|\.)motchillhay\.mobi$/.test(referrerHost) ||
-    /(^|\.)motchillx\.cx$/.test(referrerHost);
-
-  const isPlayerHost =
-    /(^|\.)yeuphim\.biz$/.test(hostname) ||
-    /(^|\.)devwithai\.net$/.test(hostname);
-
-  const inPlayerFrame =
-    isPlayerHost ||
-    (isEmbeddedFrame && fromStreamSite);
-
-  const ancestorIsStream = (() => {
-    try {
-      const origins = location.ancestorOrigins;
-      if (!origins || !origins.length) return false;
-
-      for (let i = 0; i < origins.length; i += 1) {
-        const host = new URL(origins[i]).hostname.toLowerCase();
-
-        if (
-          /(^|\.)phimmotchill\.bar$/.test(host) ||
-          /(^|\.)motchilltu\.com$/.test(host) ||
-          /(^|\.)rophim10\.cam$/.test(host) ||
-          /(^|\.)motchillhay\.mobi$/.test(host) ||
-          /(^|\.)motchillx\.cx$/.test(host)
-        ) {
-          return true;
-        }
-      }
-    } catch (_) {}
-
-    return false;
-  })();
-
-  const guardPopups = isStreamSite || inPlayerFrame || ancestorIsStream;
+    return labels.some(label =>
+      filmBrands.some(brand => label.includes(brand))
+    );
+  }
 
   // Bộ lọc AdGuard Base + Popups: chặn domain và ẩn phần tử.
   // Scriptlet không chạy trong userscript.
@@ -922,6 +860,161 @@
       setTimeout(refreshAdguard, loaded ? 1200 : 50);
     }
   }
+  // Mọi host có nhãn motchill, kể cả subdomain và đuôi mới.
+  filmBrands.push('motchill');
+
+  if (/(^|\.)motchilltu\.com$/.test(hostname)) {
+    try {
+      Object.defineProperty(page, 'aam_ads_data', {
+        configurable: true,
+        get() {
+          return [];
+        },
+        set() {}
+      });
+
+      Object.defineProperty(page, 'plpData', {
+        configurable: true,
+        get() {
+          return {
+            links: [],
+            allowed_path_parts: [],
+            allowed_exact: []
+          };
+        },
+        set() {}
+      });
+    } catch (_) {}
+  }
+
+  siteRules.push({
+    selectors(host) {
+      const list = [];
+
+      if (/(^|\.)phimmotchill\.bar$/.test(host)) {
+        list.push(
+          '.sspp-area',
+          '.sspp-modal',
+          '.ads-catfish-strip',
+          '.ads-catfish-spacer',
+          '.ads-catfish-scroll',
+          '.ads-banner-stack',
+          '.ads-player-banner-grid',
+          '.ads-popup-backdrop',
+          '.ads-popup-dialog',
+          '.ads-popup-banner',
+          '.ads-control-button',
+          'img[alt="Quảng cáo"]',
+          'a[rel~="sponsored"]'
+        );
+      }
+
+      if (/(^|\.)motchilltu\.com$/.test(host)) {
+        list.push(
+          '.cat-footer-wrapper',
+          '.cat-header-wrapper',
+          '.aam-banner-wrapper',
+          '.container-aam',
+          '.container-aam-player',
+          '.aam-player-banner',
+          '#popup-overlay',
+          '.ad-popup',
+          '.afs_ads',
+          'img[src*="/ads/"]',
+          'a[rel~="sponsored"]'
+        );
+      }
+
+      if (/(^|\.)motchillhay\.mobi$/.test(host)) {
+        list.push(
+          '.catfish-banner',
+          '.site-header-promo',
+          '.revive-frame',
+          'section[data-placement="banner"]',
+          'section[data-placement="inline"]',
+          'section[data-placement="sidebar"]',
+          'ins[data-revive-id]',
+          'a[href*="c-cl.php"]',
+          'a[href*="c-asyncjs.php"]'
+        );
+      }
+
+      return list;
+    }
+  });
+  // Mọi host có nhãn rophim. Selector thêm chỉ đúng rophim10.cam.
+  filmBrands.push('rophim');
+
+  siteRules.push({
+    selectors(host) {
+      if (!/(^|\.)rophim10\.cam$/.test(host)) return [];
+
+      return [
+        '.sspp-area',
+        '.adserver',
+        '.catfish-bottom',
+        '.catfish-top',
+        '.banner-bottom-double',
+        '.banner-detail-bottom',
+        'ins[data-revive-id]',
+        'a[href*="c-cl.php"]',
+        '.swiper-slide:has(ins[data-revive-id])',
+        '.swiper-slide:has(a[href*="c-cl.php"])'
+      ];
+    }
+  });
+  // Mọi host có nhãn phimmoi. Popup, mạng và lớp phủ dùng phần chung.
+  filmBrands.push('phimmoi');
+
+  const isYouTube =
+    /(^|\.)youtube\.com$/.test(hostname) ||
+    /(^|\.)youtube-nocookie\.com$/.test(hostname);
+
+  const isStreamSite = hostIsFilmBrand(hostname);
+
+  const isEmbeddedFrame = (() => {
+    try {
+      return page.top !== page.self;
+    } catch (_) {
+      return true;
+    }
+  })();
+
+  const referrerHost = (() => {
+    try {
+      return new URL(document.referrer).hostname.toLowerCase();
+    } catch (_) {
+      return '';
+    }
+  })();
+
+  const fromStreamSite = hostIsFilmBrand(referrerHost);
+
+  const isPlayerHost =
+    /(^|\.)yeuphim\.biz$/.test(hostname) ||
+    /(^|\.)devwithai\.net$/.test(hostname);
+
+  const inPlayerFrame =
+    isPlayerHost ||
+    (isEmbeddedFrame && fromStreamSite);
+
+  const ancestorIsStream = (() => {
+    try {
+      const origins = location.ancestorOrigins;
+      if (!origins || !origins.length) return false;
+
+      for (let i = 0; i < origins.length; i += 1) {
+        const host = new URL(origins[i]).hostname.toLowerCase();
+
+        if (hostIsFilmBrand(host)) return true;
+      }
+    } catch (_) {}
+
+    return false;
+  })();
+
+  const guardPopups = isStreamSite || inPlayerFrame || ancestorIsStream;
+
 
   // Các domain quảng cáo phổ biến
   const adDomains = [
@@ -985,7 +1078,7 @@
       }
 
       // tracking-ubt phủ lớp trong suốt lên player rồi mở popup.
-      return isMotchillX && /\/tracking-ubt[-.]/i.test(parsed.pathname);
+      return isStreamSite && /\/tracking-ubt[-.]/i.test(parsed.pathname);
     } catch (_) {
       return false;
     }
@@ -997,12 +1090,9 @@
     if (!h) return false;
     if (h === hostname) return true;
 
+    if (hostIsFilmBrand(h)) return true;
+
     return [
-      'phimmotchill.bar',
-      'motchilltu.com',
-      'rophim10.cam',
-      'motchillhay.mobi',
-      'motchillx.cx',
       'yeuphim.biz',
       'devwithai.net',
       'youtube.com',
@@ -1305,65 +1395,10 @@
     'a[rel~="sponsored"]'
   ];
 
-  const phimmotchillSelectors = [
-    '.sspp-area',
-    '.sspp-modal',
-    '.ads-catfish-strip',
-    '.ads-catfish-spacer',
-    '.ads-catfish-scroll',
-    '.ads-banner-stack',
-    '.ads-player-banner-grid',
-    '.ads-popup-backdrop',
-    '.ads-popup-dialog',
-    '.ads-popup-banner',
-    '.ads-control-button',
-    'img[alt="Quảng cáo"]',
-    'a[rel~="sponsored"]'
-  ];
-
-  const motchillTuSelectors = [
-    '.cat-footer-wrapper',
-    '.cat-header-wrapper',
-    '.aam-banner-wrapper',
-    '.container-aam',
-    '.container-aam-player',
-    '.aam-player-banner',
-    '#popup-overlay',
-    '.ad-popup',
-    '.afs_ads',
-    'img[src*="/ads/"]',
-    'a[rel~="sponsored"]'
-  ];
-
   const motchillXSelectors = [
     '.afs_ads',
     '[style*="z-index:2147483000"]',
     '[style*="z-index: 2147483000"]'
-  ];
-
-  const motchillHaySelectors = [
-    '.catfish-banner',
-    '.site-header-promo',
-    '.revive-frame',
-    'section[data-placement="banner"]',
-    'section[data-placement="inline"]',
-    'section[data-placement="sidebar"]',
-    'ins[data-revive-id]',
-    'a[href*="c-cl.php"]',
-    'a[href*="c-asyncjs.php"]'
-  ];
-
-  const rophimSelectors = [
-    '.sspp-area',
-    '.adserver',
-    '.catfish-bottom',
-    '.catfish-top',
-    '.banner-bottom-double',
-    '.banner-detail-bottom',
-    'ins[data-revive-id]',
-    'a[href*="c-cl.php"]',
-    '.swiper-slide:has(ins[data-revive-id])',
-    '.swiper-slide:has(a[href*="c-cl.php"])'
   ];
 
   const playerFrameSelectors = [
@@ -1459,11 +1494,8 @@
     const selectors = [
       ...baseSelectors,
       ...(isYouTube ? youtubeSelectors : []),
-      ...(isPhimmotchill ? phimmotchillSelectors : []),
-      ...(isMotchillTu ? motchillTuSelectors : []),
-      ...(isRoPhim ? rophimSelectors : []),
-      ...(isMotchillHay ? motchillHaySelectors : []),
-      ...(isMotchillX ? motchillXSelectors : []),
+      ...siteRules.flatMap(rule => (rule.selectors ? rule.selectors(hostname) : [])),
+      ...(isStreamSite ? motchillXSelectors : []),
       ...(inPlayerFrame ? playerFrameSelectors : []),
       ...loadCustomSelectors()
     ];
@@ -1545,31 +1577,6 @@
     subtree: true
   });
 
-  // Motchilltu nạp mảng quảng cáo rồi mới vẽ banner và popunder
-  if (isMotchillTu) {
-    try {
-      Object.defineProperty(page, 'aam_ads_data', {
-        configurable: true,
-        get() {
-          return [];
-        },
-        set() {}
-      });
-
-      Object.defineProperty(page, 'plpData', {
-        configurable: true,
-        get() {
-          return {
-            links: [],
-            allowed_path_parts: [],
-            allowed_exact: []
-          };
-        },
-        set() {}
-      });
-    } catch (_) {}
-  }
-
   // Chặn tab mới: about:blank, domain quảng cáo, và popup lúc bấm play
   try {
     PageElement.prototype.setAttribute = function (name, value) {
@@ -1630,8 +1637,8 @@
     } catch (_) {}
   }
 
-  // motchillx: tracking-ubt gắn lớp trong suốt z-index 2147483000 lên player.
-  if (isMotchillX && page.Node && page.Node.prototype) {
+  // Trang phim: tracking-ubt gắn lớp trong suốt z-index 2147483000 lên player.
+  if (isStreamSite && page.Node && page.Node.prototype) {
     const isClickjackNode = node => {
       if (!(node instanceof Element)) return false;
 
