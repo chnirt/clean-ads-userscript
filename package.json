@@ -1,0 +1,7 @@
+{
+  "name": "clean-ads-userscript",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  }
+}

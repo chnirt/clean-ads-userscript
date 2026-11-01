@@ -11,9 +11,9 @@ description: >-
 
 # Clean Ads
 
-`clean-ads.user.js` is the built script. `clean-ads-remote.user.js` is two lines: download that file from the gist and inject it into the page. Edit `src/core.js` and `steps/*.js`, then run `node build.js`. Do not edit `clean-ads.user.js` by hand. Leave the loader gist URL, grants, and `@connect` hosts alone unless the user asks to publish or change how the script is fetched.
+`clean-ads.user.js` is the built script. `clean-ads-remote.user.js` is two lines: download that file from the gist and inject it into the page. Edit `src/core.js` and `steps/*.js`, then run `npm run build`. Do not edit `clean-ads.user.js` by hand. Leave the loader gist URL, grants, and `@connect` hosts alone unless the user asks to publish or change how the script is fetched.
 
-The userscript header is the contract: `@match *://*/*`, `@run-at document-start`, `@inject-into page`, `@grant` for `GM_xmlhttpRequest`, `GM_getValue`, `GM_setValue`, `GM_deleteValue`, `unsafeWindow`, and `@connect filters.adtidy.org`. A new cross-origin fetch needs a matching `@connect` on the script that actually performs it. The remote loader runs in the extension sandbox and `eval`s the payload in the page, so `GM_*` may be missing inside `clean-ads.user.js`. Keep using the existing `gmGet` / `gmSet` / `gmDel` / `gmXhr` guards.
+The userscript header is the contract: `@match *://*/*`, `@run-at document-start`, `@inject-into page`, `@grant` for `GM_xmlhttpRequest`, `GM_getValue`, `GM_setValue`, `GM_deleteValue`, `unsafeWindow`, and `@connect filters.adtidy.org`. A new cross-origin fetch needs a matching `@connect` on the script that actually performs it. The remote loader runs in the extension sandbox and injects the payload into the page, so `GM_*` may be missing inside `clean-ads.user.js`. Keep using the existing `gmGet` / `gmSet` / `gmDel` / `gmXhr` guards. The sandbox and some pages enforce Trusted Types: set script text and `eval` through a `trustedTypes` policy (`createScript` / `createScriptURL`), not a raw string.
 
 ## Page context
 
@@ -28,7 +28,7 @@ The built file is one IIFE with `'use strict'`. No modules or dependencies. `bui
 | File | Role |
 |---|---|
 | `steps/01-adguard.js` | AdGuard Base + Popups compile, cache, and CSS |
-| `steps/02-motchill.js` | Brand `motchill`, extra selectors, motchilltu globals |
+| `steps/02-motchill.js` | Brand `motchill`, extra selectors, motchilltu globals, JW setup without VAST so motchillx can play |
 | `steps/03-rophim.js` | Brand `rophim`, extra selectors for `rophim10.cam` |
 | `steps/04-phimmoi.js` | Brand `phimmoi` |
 | `src/core.js` | Shared popup, network, overlay, and player behavior |
@@ -125,7 +125,7 @@ Embedded film player (`inPlayerFrame`): call `page.__ROPHIM_CANCEL_TVC__` when i
 After an edit, rebuild and confirm the file still parses:
 
 ```bash
-node build.js
+npm run build
 node --check clean-ads.user.js
 ```
 

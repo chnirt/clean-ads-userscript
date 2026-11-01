@@ -13,7 +13,7 @@
 // @connect      filters.adtidy.org
 // ==/UserScript==
 
-// Ghép bằng `node build.js` từ src/core.js và steps/. Sửa file nguồn rồi build lại.
+// Ghép bằng `npm run build` từ src/core.js và steps/. Sửa file nguồn rồi build lại.
 
 (() => {
   'use strict';

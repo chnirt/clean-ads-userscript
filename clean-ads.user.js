@@ -13,7 +13,7 @@
 // @connect      filters.adtidy.org
 // ==/UserScript==
 
-// Ghép bằng `node build.js` từ src/core.js và steps/. Sửa file nguồn rồi build lại.
+// Ghép bằng `npm run build` từ src/core.js và steps/. Sửa file nguồn rồi build lại.
 
 (() => {
   'use strict';
@@ -862,6 +862,98 @@
   }
   // Mọi host có nhãn motchill, kể cả subdomain và đuôi mới.
   filmBrands.push('motchill');
+
+  function motchillHost(host) {
+    return String(host || '')
+      .toLowerCase()
+      .split('.')
+      .filter(Boolean)
+      .some(label => label.includes('motchill'));
+  }
+
+  // motchillx bật JW với client vast. AdGuard chặn vast.js nên player đứng ở 00:00.
+  if (motchillHost(hostname)) {
+    const previousIsAdURL = isAdURL;
+
+    isAdURL = function (input) {
+      try {
+        let raw = input;
+
+        if (input && typeof input === 'object') {
+          raw = input.url || input.href || String(input);
+        }
+
+        if (typeof raw === 'string' && raw) {
+          const parsed = new URL(raw, location.href);
+          const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+          const path = parsed.pathname || '';
+
+          if (/(^|\.)jwpcdn\.com$/.test(host) && /\/player\//.test(path)) {
+            return false;
+          }
+
+          if (/\.(?:m3u8|ts)$/i.test(path)) return false;
+        }
+      } catch (_) {}
+
+      return previousIsAdURL(input);
+    };
+
+    const patchPlayer = player => {
+      if (!player || player.__cleanAdsSetup || typeof player.setup !== 'function') {
+        return player;
+      }
+
+      const setup = player.setup;
+
+      player.setup = function (config) {
+        const next = config && typeof config === 'object'
+          ? Object.assign({}, config)
+          : config;
+
+        if (next && typeof next === 'object') delete next.advertising;
+
+        return setup.call(this, next);
+      };
+
+      player.__cleanAdsSetup = true;
+      return player;
+    };
+
+    const wrapJw = jw => {
+      if (typeof jw !== 'function' || jw.__cleanAds) return jw;
+
+      const wrapped = new Proxy(jw, {
+        apply(target, thisArg, args) {
+          return patchPlayer(Reflect.apply(target, thisArg, args));
+        }
+      });
+
+      wrapped.__cleanAds = true;
+      return wrapped;
+    };
+
+    let current = typeof page.jwplayer === 'function'
+      ? wrapJw(page.jwplayer)
+      : page.jwplayer;
+
+    try {
+      Object.defineProperty(page, 'jwplayer', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return current;
+        },
+        set(value) {
+          current = typeof value === 'function' ? wrapJw(value) : value;
+        }
+      });
+    } catch (_) {
+      if (typeof page.jwplayer === 'function') {
+        page.jwplayer = wrapJw(page.jwplayer);
+      }
+    }
+  }
 
   if (/(^|\.)motchilltu\.com$/.test(hostname)) {
     try {
