@@ -433,6 +433,7 @@
   // Selector ẩn quảng cáo HTML
   const baseSelectors = [
     'ins.adsbygoogle',
+    'ins[data-revive-id]',
     '.adsbygoogle',
     '[id^="google_ads"]',
     '[id^="div-gpt-ad"]',
@@ -631,9 +632,48 @@
     });
   }
 
+  // Revive gọi lại mỗi 300ms nếu c-asyncjs.php không chạy. Slot giả để vòng đó dừng.
+  try {
+    if (!page.reviveAsync) {
+      const slots = Object.create(null);
+      const reviveApi = new Proxy(slots, {
+        get(target, prop) {
+          if (prop in target) return target[prop];
+          if (typeof prop !== 'string') return undefined;
+
+          target[prop] = {
+            detect() {
+              return { zones: {} };
+            },
+            apply() {}
+          };
+
+          return target[prop];
+        }
+      });
+
+      Object.defineProperty(page, 'reviveAsync', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return reviveApi;
+        },
+        set(value) {
+          Object.defineProperty(page, 'reviveAsync', {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value
+          });
+        }
+      });
+    }
+  } catch (_) {}
+
   // Xóa tài nguyên từ domain quảng cáo đã nhận diện
   function cleanNode(node) {
     if (!(node instanceof Element)) return;
+    if (node.closest && node.closest('ins[data-revive-id]')) return;
 
     const candidates = [node];
 
@@ -647,6 +687,7 @@
 
     for (const element of candidates) {
       if (!element.isConnected) continue;
+      if (element.closest && element.closest('ins[data-revive-id]')) continue;
 
       const resourceURL =
         element.getAttribute('src') ||
