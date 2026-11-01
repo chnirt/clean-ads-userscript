@@ -48,8 +48,12 @@ if (motchillHost(hostname)) {
       const next = config && typeof config === 'object'
         ? Object.assign({}, config)
         : config;
+      const file = next && typeof next.file === 'string' ? next.file : '';
 
-      if (next && typeof next === 'object') delete next.advertising;
+      // motchilln phát 1s_blank.mp4 kèm VAST, xong mới hiện iframe phim.
+      if (next && typeof next === 'object' && !/1s_blank\.mp4(?:$|\?)/.test(file)) {
+        delete next.advertising;
+      }
 
       return setup.call(this, next);
     };

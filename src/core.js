@@ -746,6 +746,18 @@
     const guardInsert = native => function (node) {
       try {
         if (isClickjackNode(node)) return node;
+
+        const code = node && node.tagName === 'SCRIPT' ? node.textContent || '' : '';
+
+        if (
+          typeof page.playerInstance === 'undefined' &&
+          /^\s*playerInstance\.on\(/.test(code)
+        ) {
+          node.textContent =
+            'if (typeof playerInstance !== "undefined" && playerInstance && typeof playerInstance.on === "function") {\n' +
+            code +
+            '\n}';
+        }
       } catch (_) {}
 
       return native.apply(this, arguments);
@@ -1927,6 +1939,9 @@
   function skipJwPlayerAds() {
     document.querySelectorAll('.jwplayer').forEach(player => {
       if (!/jw-flag-ads/.test(String(player.className))) return;
+
+      // motchilln dùng player jw-ad-* làm cổng quảng cáo. Tua liên tục khiến trang tạo lại player.
+      if (/^jw-ad-/.test(player.id || '')) return;
 
       const skip = player.querySelector(
         '.jw-skip, .jw-skip-container button, .jw-skip-icon'
